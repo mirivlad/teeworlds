@@ -136,6 +136,9 @@ public:
 		int m_MapChunk;
 		bool m_NoRconNote;
 		bool m_Quitting;
+
+		bool m_IsBot;
+
 		const IConsole::CCommandInfo *m_pRconCmdToSend;
 		int m_MapListEntryToSend;
 
@@ -212,6 +215,7 @@ public:
 
 	void SetRconCID(int ClientID);
 	bool IsAuthed(int ClientID) const;
+	bool IsBot(int ClientID) const;
 	bool IsBanned(int ClientID);
 	int GetClientInfo(int ClientID, CClientInfo *pInfo) const;
 	void GetClientAddr(int ClientID, char *pAddrStr, int Size) const;
@@ -224,6 +228,9 @@ public:
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID);
 
 	void DoSnapshot();
+
+	int NewBot(int ClientID);
+	int DelBot(int ClientID);
 
 	static int NewClientCallback(int ClientID, void *pUser);
 	static int DelClientCallback(int ClientID, const char *pReason, void *pUser);

@@ -13,6 +13,9 @@
 #include "eventhandler.h"
 #include "gameworld.h"
 
+#include "player.h"
+#include "botengine.h"
+
 /*
 	Tick
 		Game Context (CGameContext::tick)
@@ -131,6 +134,8 @@ public:
 	CVoteOptionServer *m_pVoteOptionFirst;
 	CVoteOptionServer *m_pVoteOptionLast;
 
+	class CBotEngine *m_pBotEngine;
+
 	// helper functions
 	void CreateDamage(vec2 Pos, int Id, vec2 Source, int HealthAmount, int ArmorAmount, bool Self);
 	void CreateExplosion(vec2 Pos, int Owner, int Weapon, int MaxDamage);
@@ -166,6 +171,11 @@ public:
 
 	//
 	void CheckPureTuning();
+
+	// Bot slots
+	void DeleteBot(int i);
+	bool AddBot(int i);
+	void CheckBotNumber();
 
 	//
 	void SwapTeams();

@@ -1,3 +1,5 @@
+> **AI bots / Portainer / Docker:** [Руководство по установке и настройке](README-bots.ru.md)
+
 <a href="https://repology.org/metapackage/teeworlds/versions">
     <img src="https://repology.org/badge/vertical-allrepos/teeworlds.svg" alt="Packaging status" align="right">
 </a>

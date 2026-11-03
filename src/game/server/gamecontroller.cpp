@@ -61,7 +61,7 @@ void IGameController::DoActivityCheck()
 
 	for(int i = 0; i < MAX_CLIENTS; ++i)
 	{
-		if(GameServer()->m_apPlayers[i] && !GameServer()->m_apPlayers[i]->IsDummy() && (GameServer()->m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS || Config()->m_SvInactiveKick > 0) &&
+		if(GameServer()->m_apPlayers[i] && !GameServer()->m_apPlayers[i]->IsDummy() && !GameServer()->m_apPlayers[i]->IsBot() && (GameServer()->m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS || Config()->m_SvInactiveKick > 0) &&
 			!Server()->IsAuthed(i) && (GameServer()->m_apPlayers[i]->m_InactivityTickCounter > Config()->m_SvInactiveKickTime*Server()->TickSpeed()*60))
 		{
 			if(GameServer()->m_apPlayers[i]->GetTeam() == TEAM_SPECTATORS)

@@ -1,0 +1,9 @@
+.git
+.github
+build/
+build-*/
+**/build/
+**/build-*/
+*.log
+*.tar.gz
+*.patch

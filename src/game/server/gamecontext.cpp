@@ -1,3 +1,4 @@
+#include <algorithm>
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <base/math.h>
@@ -23,6 +24,8 @@
 #include "gamecontext.h"
 #include "player.h"
 
+#include "bot.h"
+
 enum
 {
 	RESET,
@@ -47,6 +50,7 @@ void CGameContext::Construct(int Resetting)
 
 	if(Resetting==NO_RESET)
 		m_pVoteOptionHeap = new CHeap();
+	m_pBotEngine = new CBotEngine(this);
 }
 
 CGameContext::CGameContext(int Resetting)
@@ -65,6 +69,7 @@ CGameContext::~CGameContext()
 		delete m_apPlayers[i];
 	if(!m_Resetting)
 		delete m_pVoteOptionHeap;
+	delete m_pBotEngine;
 }
 
 void CGameContext::Clear()
@@ -540,6 +545,32 @@ void CGameContext::OnTick()
 	// check tuning
 	CheckPureTuning();
 
+	// Check bot number
+	CheckBotNumber();
+
+	// OnPredictedInput for bots
+	if (!m_World.m_Paused) {
+		for(int i = 0; i < MAX_CLIENTS ; i++)
+		{
+			if(!m_apPlayers[i] || !m_apPlayers[i]->IsBot())
+				continue;
+			CNetObj_PlayerInput Input = m_apPlayers[i]->m_pBot->GetLastInputData();
+			m_apPlayers[i]->OnPredictedInput(&Input);
+		}
+	}
+	for(int i = 0; i < MAX_CLIENTS ; i++)
+	{
+		if(!m_apPlayers[i] || !m_apPlayers[i]->IsBot())
+			continue;
+		CNetObj_PlayerInput Input = m_apPlayers[i]->m_pBot->GetInputData();
+		m_apPlayers[i]->OnDirectInput(&Input);
+	}
+
+	int ClientCount = 0;
+	for(int i = 0; i < MAX_CLIENTS ; i++)
+		if(m_apPlayers[i] && !m_apPlayers[i]->IsBot())
+			ClientCount++;
+
 	// copy tuning
 	m_World.m_Core.m_Tuning = m_Tuning;
 	m_World.Tick();
@@ -547,12 +578,16 @@ void CGameContext::OnTick()
 	//if(world.paused) // make sure that the game object always updates
 	m_pController->Tick();
 
-	for(int i = 0; i < MAX_CLIENTS; i++)
+	// Don't tick bots if the server is empty
+	if(Config()->m_SvBotAlwaysEnable == 2 || ClientCount > 0)
 	{
-		if(m_apPlayers[i])
+		for(int i = 0; i < MAX_CLIENTS; i++)
 		{
-			m_apPlayers[i]->Tick();
-			m_apPlayers[i]->PostTick();
+			if(m_apPlayers[i])
+			{
+				m_apPlayers[i]->Tick();
+				m_apPlayers[i]->PostTick();
+			}
 		}
 	}
 
@@ -575,7 +610,7 @@ void CGameContext::OnTick()
 				bool aVoteChecked[MAX_CLIENTS] = {0};
 				for(int i = 0; i < MAX_CLIENTS; i++)
 				{
-					if(!m_apPlayers[i] || m_apPlayers[i]->GetTeam() == TEAM_SPECTATORS || aVoteChecked[i])	// don't count in votes by spectators
+					if(!m_apPlayers[i] || m_apPlayers[i]->GetTeam() == TEAM_SPECTATORS || aVoteChecked[i] || m_apPlayers[i]->IsBot())	// don't count in votes by spectators
 						continue;
 
 					int ActVote = m_apPlayers[i]->m_Vote;
@@ -622,7 +657,6 @@ void CGameContext::OnTick()
 			}
 		}
 	}
-
 
 #ifdef CONF_DEBUG
 	for(int i = 0; i < MAX_CLIENTS; i++)
@@ -705,7 +739,7 @@ void CGameContext::OnClientEnter(int ClientID)
 
 	for(int i = 0; i < MAX_CLIENTS; ++i)
 	{
-		if(i == ClientID || !m_apPlayers[i] || (!Server()->ClientIngame(i) && !m_apPlayers[i]->IsDummy()))
+		if(i == ClientID || !m_apPlayers[i] || (!Server()->ClientIngame(i) && !(m_apPlayers[i]->IsDummy() || m_apPlayers[i]->IsBot())))
 			continue;
 
 		// new info for others
@@ -811,6 +845,9 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 		if(p->GetOwner() == ClientID)
 			p->LoseOwner();
 	}
+
+	if(m_apPlayers[ClientID]->IsBot())
+		Server()->DelBot(ClientID);
 
 	delete m_apPlayers[ClientID];
 	m_apPlayers[ClientID] = 0;
@@ -956,7 +993,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 					return;
 
 				int KickID = str_toint(pMsg->m_Value);
-				if(KickID < 0 || KickID >= MAX_CLIENTS || !m_apPlayers[KickID] || KickID == ClientID || Server()->IsAuthed(KickID))
+				if(KickID < 0 || KickID >= MAX_CLIENTS || !m_apPlayers[KickID] || KickID == ClientID || Server()->IsAuthed(KickID) || Server()->IsBot(KickID))
 					return;
 
 				str_format(aDesc, sizeof(aDesc), "%2d: %s", KickID, Server()->ClientName(KickID));
@@ -991,7 +1028,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 					return;
 
 				int SpectateID = str_toint(pMsg->m_Value);
-				if(SpectateID < 0 || SpectateID >= MAX_CLIENTS || !m_apPlayers[SpectateID] || m_apPlayers[SpectateID]->GetTeam() == TEAM_SPECTATORS || SpectateID == ClientID)
+				if(SpectateID < 0 || SpectateID >= MAX_CLIENTS || !m_apPlayers[SpectateID] || m_apPlayers[SpectateID]->GetTeam() == TEAM_SPECTATORS || SpectateID == ClientID || Server()->IsBot(SpectateID))
 					return;
 
 				str_format(aDesc, sizeof(aDesc), "%2d: %s", SpectateID, Server()->ClientName(SpectateID));
@@ -1634,6 +1671,9 @@ void CGameContext::OnInit()
 	// create all entities from the game layer
 	CMapItemLayerTilemap *pTileMap = m_Layers.GameLayer();
 	CTile *pTiles = (CTile *)Kernel()->RequestInterface<IMap>()->GetData(pTileMap->m_Data);
+
+	m_pBotEngine->Init(pTiles, pTileMap->m_Width, pTileMap->m_Height);
+
 	for(int y = 0; y < pTileMap->m_Height; y++)
 	{
 		for(int x = 0; x < pTileMap->m_Width; x++)
@@ -1675,6 +1715,8 @@ void CGameContext::OnInit()
 			OnClientConnected(MAX_CLIENTS -i-1, true, false);
 	}
 #endif
+
+	CheckBotNumber();
 }
 
 void CGameContext::OnShutdown()
@@ -1701,6 +1743,13 @@ void CGameContext::OnSnap(int ClientID)
 	m_pController->Snap(ClientID);
 	m_Events.Snap(ClientID);
 
+	// Snap bot debug info
+	if(Config()->m_SvBotEngineDrawGraph)
+		m_pBotEngine->Snap(ClientID);
+	for(int i = 0; i < MAX_CLIENTS; i++)
+		if(m_apPlayers[i] && m_apPlayers[i]->IsBot() && Config()->m_SvBotDrawTarget)
+			m_apPlayers[i]->m_pBot->Snap(ClientID);
+
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		if(m_apPlayers[i])
@@ -1716,7 +1765,7 @@ void CGameContext::OnPostSnap()
 
 bool CGameContext::IsClientBot(int ClientID) const
 {
-	return m_apPlayers[ClientID] && m_apPlayers[ClientID]->IsDummy();
+	return m_apPlayers[ClientID] && m_apPlayers[ClientID]->IsBot();
 }
 
 bool CGameContext::IsClientReady(int ClientID) const
@@ -1741,3 +1790,73 @@ const char *CGameContext::NetVersionHashUsed() const { return GAME_NETVERSION_HA
 const char *CGameContext::NetVersionHashReal() const { return GAME_NETVERSION_HASH; }
 
 IGameServer *CreateGameServer() { return new CGameContext; }
+
+void CGameContext::DeleteBot(int i) {
+	if(m_apPlayers[i] && m_apPlayers[i]->m_IsBot) {
+		dbg_msg("context","Delete bot at slot: %d", i);
+		OnClientDrop(i, "Everything is awesome");
+	}
+}
+
+bool CGameContext::AddBot(int i) {
+	if(m_apPlayers[i])
+		return false;
+	if(Server()->NewBot(i) == 1)
+		return false;
+	dbg_msg("context","Add a bot at slot: %d", i);
+	m_apPlayers[i] = new(i) CPlayer(this, i, false);
+	m_apPlayers[i]->m_IsBot = true;
+	m_apPlayers[i]->m_pBot = new CBot(m_pBotEngine, m_apPlayers[i]);
+	Server()->SetClientName(i, g_aBotName[i % 16]);
+	Server()->SetClientClan(i, g_BotClan);
+	for(int p = 0; p < 6; p++)
+	{
+		m_apPlayers[i]->m_TeeInfos.m_aUseCustomColors[p] = 1;
+		m_apPlayers[i]->m_TeeInfos.m_aSkinPartColors[p] = random_int() & 0xffffffff;
+	}
+	OnClientEnter(i);
+
+	return true;
+}
+
+void CGameContext::CheckBotNumber() {
+	int BotNumber = 0;
+	int PlayerCount = 0;
+	int ClientCount = 0;
+	for (int i = 0 ; i < MAX_CLIENTS ; ++i) {
+		if (!m_apPlayers[i])
+			continue;
+		if (m_apPlayers[i]->IsBot())
+			BotNumber++;
+		else {
+			if (m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS)
+				PlayerCount++;
+			ClientCount++;
+		}
+	}
+	int MaxBotSlots = std::min(Config()->m_SvBotSlots, Config()->m_SvPlayerSlots - PlayerCount);
+	if(!Config()->m_SvBotAlwaysEnable && !ClientCount)
+		BotNumber += MaxBotSlots;
+	// Remove bot excedent
+	if (BotNumber - MaxBotSlots > 0)	{
+		int FirstBot = 0;
+		for (int i = 0 ; i < BotNumber - MaxBotSlots ; i++) {
+			for (; FirstBot < MAX_CLIENTS ; FirstBot++)
+				if (m_apPlayers[FirstBot] && m_apPlayers[FirstBot]->IsBot())
+					break;
+			if (FirstBot < MAX_CLIENTS)
+				DeleteBot(FirstBot);
+		}
+	}
+	// Add missing bot if possible
+	if (MaxBotSlots - BotNumber > 0) {
+		int LastFreeSlot = Config()->m_SvMaxClients-1;
+		for (int i = 0 ; i < MaxBotSlots - BotNumber ; i++) {
+			for (; LastFreeSlot >= 0 ; LastFreeSlot--)
+				if(!m_apPlayers[LastFreeSlot])
+					break;
+			if (LastFreeSlot >= 0)
+				AddBot(LastFreeSlot);
+		}
+	}
+}
