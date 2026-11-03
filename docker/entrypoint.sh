@@ -3,12 +3,16 @@ set -eu
 
 # If /config/server.cfg exists it becomes the authoritative configuration.
 # Otherwise Portainer environment variables are used on each restart.
+# The engine only reads configs from its registered storage roots, never
+# from absolute /config paths. Put generated/manual configs in $USERDIR.
+userdir="${XDG_DATA_HOME:-/config/data}/teeworlds"
+mkdir -p "$userdir"
 if [ -f /config/server.cfg ]; then
-  exec ./teeworlds_srv -f /config/server.cfg "$@"
+  cp /config/server.cfg "$userdir/.custom-server.cfg"
+  exec ./teeworlds_srv -f .custom-server.cfg "$@"
 fi
 
-mkdir -p /config
-config=/config/.generated-server.cfg
+config="$userdir/.generated-server.cfg"
 
 # Quotes a Teeworlds string value, avoiding multiline console injection.
 quote_value() {
@@ -46,4 +50,4 @@ if [ -n "${TW_RCON_PASSWORD:-}" ]; then
   string sv_rcon_password "$TW_RCON_PASSWORD"
 fi
 
-exec ./teeworlds_srv -f "$config" "$@"
+exec ./teeworlds_srv -f .generated-server.cfg "$@"
