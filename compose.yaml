@@ -1,0 +1,28 @@
+# Paste into Portainer > Stacks > Add stack > Web editor.
+# After the first GHCR build, the image is published at the address below.
+services:
+  teeworlds:
+    image: ghcr.io/mirivlad/teeworlds-bots:latest
+    restart: unless-stopped
+    ports:
+      - "8303:8303/udp"
+    environment:
+      TW_SERVER_NAME: "Teeworlds | Bots"
+      TW_MAP: "dm1"
+      TW_GAME_TYPE: "dm"
+      TW_MAX_CLIENTS: "16"
+      TW_PLAYER_SLOTS: "12"
+      TW_BOT_SLOTS: "4"
+      TW_BOT_ALWAYS_ENABLE: "2"
+      TW_BOT_ALLOW_MOVE: "1"
+      TW_BOT_ALLOW_FIRE: "1"
+      TW_BOT_ALLOW_HOOK: "1"
+      TW_PUBLIC: "0"
+      # Set a strong password before enabling remote RCON:
+      # TW_RCON_PASSWORD: "change-this"
+    volumes:
+      - teeworlds-config:/config
+    stop_grace_period: 15s
+
+volumes:
+  teeworlds-config:

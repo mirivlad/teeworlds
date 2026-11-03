@@ -6,6 +6,7 @@
 #include "gamecontext.h"
 #include "gamecontroller.h"
 #include "player.h"
+#include "bot.h"
 
 
 MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
@@ -34,10 +35,14 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, bool Dummy, bool AsSpe
 	m_DeadSpecMode = false;
 	m_Spawning = false;
 	mem_zero(&m_Latency, sizeof(m_Latency));
+	m_IsBot = false;
+	m_pBot = 0;
 }
 
 CPlayer::~CPlayer()
 {
+	if(m_pBot)
+		delete m_pBot;
 	delete m_pCharacter;
 	m_pCharacter = 0;
 }
@@ -46,6 +51,9 @@ void CPlayer::Tick()
 {
 	if(!IsDummy() && !Server()->ClientIngame(m_ClientID))
 		return;
+
+	if(IsBot())
+		m_pBot->Tick();
 
 	Server()->SetClientScore(m_ClientID, m_Score);
 
@@ -74,6 +82,8 @@ void CPlayer::Tick()
 	{
 		delete m_pCharacter;
 		m_pCharacter = 0;
+		if(IsBot())
+			m_pBot->OnReset();
 	}
 
 	if(!GameServer()->m_pController->IsGamePaused())
@@ -137,7 +147,7 @@ void CPlayer::PostTick()
 
 void CPlayer::Snap(int SnappingClient)
 {
-	if(!IsDummy() && !Server()->ClientIngame(m_ClientID))
+	if(!IsDummy() && !IsBot() && !Server()->ClientIngame(m_ClientID))
 		return;
 
 	CNetObj_PlayerInfo *pPlayerInfo = static_cast<CNetObj_PlayerInfo *>(Server()->SnapNewItem(NETOBJTYPE_PLAYERINFO, m_ClientID, sizeof(CNetObj_PlayerInfo)));
@@ -155,6 +165,13 @@ void CPlayer::Snap(int SnappingClient)
 		pPlayerInfo->m_PlayerFlags |= PLAYERFLAG_WATCHING;
 
 	pPlayerInfo->m_Latency = SnappingClient == -1 ? m_Latency.m_Min : GameServer()->m_apPlayers[SnappingClient]->m_aActLatency[m_ClientID];
+
+	if(IsBot()) {
+		pPlayerInfo->m_PlayerFlags |= PLAYERFLAG_BOT;
+		pPlayerInfo->m_Latency = 0;
+	}
+
+
 	pPlayerInfo->m_Score = m_Score;
 
 	if(m_ClientID == SnappingClient && (m_Team == TEAM_SPECTATORS || m_DeadSpecMode))
@@ -324,6 +341,8 @@ void CPlayer::KillCharacter(int Weapon)
 		m_pCharacter->Die(m_ClientID, Weapon);
 		delete m_pCharacter;
 		m_pCharacter = 0;
+		if(IsBot())
+			m_pBot->OnReset();
 	}
 }
 
@@ -470,4 +489,9 @@ void CPlayer::TryRespawn()
 	m_pCharacter = new(m_ClientID) CCharacter(&GameServer()->m_World);
 	m_pCharacter->Spawn(this, SpawnPos);
 	GameServer()->CreatePlayerSpawn(SpawnPos);
+}
+
+void CPlayer::SetCID(int ClientID) {
+	if(m_IsBot)
+		m_ClientID = ClientID;
 }

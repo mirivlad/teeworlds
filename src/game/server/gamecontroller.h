@@ -208,6 +208,7 @@ public:
 	bool IsPlayerReadyMode() const;
 	bool IsTeamChangeAllowed() const;
 	bool IsTeamplay() const { return m_GameFlags&GAMEFLAG_TEAMS; }
+	bool IsFlagGame() const { return m_GameFlags&GAMEFLAG_FLAGS; };
 	bool IsSurvival() const { return m_GameFlags&GAMEFLAG_SURVIVAL; }
 
 	const char *GetGameType() const { return m_pGameType; }

@@ -44,6 +44,9 @@ public:
 		return SendMsg(&Packer, Flags, ClientID);
 	}
 
+	virtual int NewBot(int ClientID) = 0;
+	virtual int DelBot(int ClientID) = 0;
+
 	virtual void SetClientName(int ClientID, char const *pName) = 0;
 	virtual void SetClientClan(int ClientID, char const *pClan) = 0;
 	virtual void SetClientCountry(int ClientID, int Country) = 0;
@@ -62,6 +65,7 @@ public:
 	};
 	virtual void SetRconCID(int ClientID) = 0;
 	virtual bool IsAuthed(int ClientID) const = 0;
+	virtual bool IsBot(int ClientID) const = 0;
 	virtual bool IsBanned(int ClientID) = 0;
 	virtual void Kick(int ClientID, const char *pReason) = 0;
 	virtual void ChangeMap(const char *pMap) = 0;
