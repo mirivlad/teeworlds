@@ -9,8 +9,9 @@ services:
     environment:
       TW_SERVER_NAME: "Teeworlds | Bots"
       TW_MAP: "dm1"
-      # Optional automatic map rotation, e.g. "dm1 dm2 dm3 dm6 dm7 dm8 dm9".
-      TW_MAP_ROTATION: ""
+      # Every map included in the image is in both rotation and vote options.
+      TW_MAP_ROTATION: "all"
+      TW_VOTE_MAPS: "all"
       TW_MATCHES_PER_MAP: "1"
       TW_TIME_LIMIT: "0"
       TW_SCORE_LIMIT: "20"
