@@ -149,6 +149,7 @@ MACRO_CONFIG_INT(SvBotAllowHook, sv_bot_allow_hook, 1, 0, 1, CFGFLAG_SERVER, "Bo
 MACRO_CONFIG_INT(SvBotAllowMove, sv_bot_allow_move, 1, 0, 1, CFGFLAG_SERVER, "Bots are allowed to move")
 MACRO_CONFIG_INT(SvBotAllowFire, sv_bot_allow_fire, 1, 0, 1, CFGFLAG_SERVER, "Bots fire")
 MACRO_CONFIG_INT(SvBotAccuracyError, sv_bot_accuracy, 1, 0, 1, CFGFLAG_SERVER, "Random accuracy error for bots")
+MACRO_CONFIG_INT(SvBotDifficulty, sv_bot_difficulty, 1, 0, 2, CFGFLAG_SERVER, "Bot skill: 0 novice, 1 normal, 2 veteran")
 
 MACRO_CONFIG_INT(SvBotAlwaysEnable, sv_bot_always_enable, 1, 0, 2, CFGFLAG_SERVER, "Make the bots stay(=1)/play(=2) even without clients")
 

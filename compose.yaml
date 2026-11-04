@@ -19,6 +19,8 @@ services:
       TW_MAX_CLIENTS: "16"
       TW_PLAYER_SLOTS: "12"
       TW_BOT_SLOTS: "4"
+      # novice / normal / veteran
+      TW_BOT_DIFFICULTY: "normal"
       TW_BOT_ALWAYS_ENABLE: "2"
       TW_BOT_ALLOW_MOVE: "1"
       TW_BOT_ALLOW_FIRE: "1"
