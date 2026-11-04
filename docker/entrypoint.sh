@@ -72,6 +72,13 @@ integer sv_bot_allow_move "${TW_BOT_ALLOW_MOVE:-1}"
 integer sv_bot_allow_fire "${TW_BOT_ALLOW_FIRE:-1}"
 integer sv_bot_allow_hook "${TW_BOT_ALLOW_HOOK:-1}"
 integer sv_bot_accuracy "${TW_BOT_ACCURACY:-1}"
+case "${TW_BOT_DIFFICULTY:-normal}" in
+  novice|easy|0) bot_difficulty=0 ;;
+  normal|1) bot_difficulty=1 ;;
+  veteran|hard|2) bot_difficulty=2 ;;
+  *) echo "Invalid TW_BOT_DIFFICULTY: use novice, normal or veteran" >&2; exit 2 ;;
+esac
+integer sv_bot_difficulty "$bot_difficulty"
 if [ -n "${TW_RCON_PASSWORD:-}" ]; then
   string sv_rcon_password "$TW_RCON_PASSWORD"
 fi

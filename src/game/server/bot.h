@@ -118,6 +118,12 @@ protected:
 	CNetObj_PlayerInput m_InputData;
 	CNetObj_PlayerInput m_LastData;
 
+	// Per-bot action timers, measured in authoritative server ticks.
+	int m_NextShotTick;
+	int m_NextHookTick;
+	int m_ReactionReadyTick;
+	int m_LastVisibleTargetCID;
+
 	int m_Move;
 	vec2 m_Direction;
 	int m_Jump;

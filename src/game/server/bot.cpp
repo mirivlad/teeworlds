@@ -13,6 +13,35 @@
 #include "entities/flag.h"
 #include "entities/pickup.h"
 
+// Individual reactions and mistakes, instead of just a boolean aim error.
+// A profile may be selected with sv_bot_difficulty (0-2).
+struct CBotDifficultyProfile
+{
+	int m_ReactionMs;
+	int m_FireDelayMs;
+	int m_HookDelayMs;
+	int m_HookChance;
+	float m_AimErrorDeg;
+};
+
+static CBotDifficultyProfile BotDifficultyProfile(int Difficulty)
+{
+	switch(Difficulty)
+	{
+	case 0: // Novice: slow to notice enemies, imprecise, reluctant to hook.
+		return {650, 450, 900, 25, 15.0f};
+	case 2: // Veteran: close to the original aggressive AI.
+		return {80, 70, 140, 95, 1.5f};
+	default: // Normal: capable movement, human-like engagement delay.
+		return {300, 220, 500, 60, 7.0f};
+	}
+}
+
+static int BotDelayTicks(int Milliseconds, int TickSpeed)
+{
+	return maximum(1, (Milliseconds * TickSpeed + 999) / 1000);
+}
+
 CBot::CBot(CBotEngine *pBotEngine, CPlayer *pPlayer)
 {
 	m_pBotEngine = pBotEngine;
@@ -21,6 +50,10 @@ CBot::CBot(CBotEngine *pBotEngine, CPlayer *pPlayer)
 	m_Flags = 0;
 	mem_zero(&m_InputData, sizeof(m_InputData));
 	m_LastData = m_InputData;
+	m_NextShotTick = 0;
+	m_NextHookTick = 0;
+	m_ReactionReadyTick = 0;
+	m_LastVisibleTargetCID = -1;
 
 	m_SnapID = GameServer()->Server()->SnapNewID();
 	m_ComputeTarget.m_Type = CTarget::TARGET_EMPTY;
@@ -40,6 +73,12 @@ void CBot::OnReset()
 	m_Flags = 0;
 	m_pPath->m_Size = 0;
 	m_ComputeTarget.m_Type = CTarget::TARGET_EMPTY;
+	m_NextShotTick = 0;
+	m_NextHookTick = 0;
+	m_ReactionReadyTick = 0;
+	m_LastVisibleTargetCID = -1;
+	mem_zero(&m_InputData, sizeof(m_InputData));
+	m_LastData = m_InputData;
 }
 
 void CBot::UpdateTargetOrder()
@@ -360,6 +399,12 @@ void CBot::Tick()
 
 	mem_zero(&m_InputData, sizeof(m_InputData));
 
+	// Fire is an edge counter: keep it across ticks, releasing a pressed
+	// button on the following tick. Otherwise delayed shots may look like
+	// repeated presses or get swallowed by CountInput().
+	m_InputData.m_Fire = m_LastData.m_Fire;
+	if(m_InputData.m_Fire & 1)
+		m_InputData.m_Fire = (m_InputData.m_Fire + 1) & INPUT_STATE_MASK;
 	m_InputData.m_WantedWeapon = m_LastData.m_WantedWeapon;
 
 	vec2 Pos = pMe->m_Pos;
@@ -378,11 +423,39 @@ void CBot::Tick()
 
 	m_RealTarget = m_Target + Pos;
 
-	if(GameServer()->Config()->m_SvBotAllowFire && m_pPlayer->GetCharacter()->CanFire())
+	const CBotDifficultyProfile Profile = BotDifficultyProfile(GameServer()->Config()->m_SvBotDifficulty);
+	const int Tick = GameServer()->Server()->Tick();
+	const int VisibleCID = InSight ? m_ComputeTarget.m_PlayerCID : -1;
+	if(VisibleCID != m_LastVisibleTargetCID)
+	{
+		m_LastVisibleTargetCID = VisibleCID;
+		m_ReactionReadyTick = Tick + BotDelayTicks(Profile.m_ReactionMs, GameServer()->Server()->TickSpeed());
+	}
+
+	if(InSight && Tick >= m_ReactionReadyTick && Tick >= m_NextShotTick &&
+		!(m_LastData.m_Fire & 1) && GameServer()->Config()->m_SvBotAllowFire &&
+		m_pPlayer->GetCharacter()->CanFire())
 		HandleWeapon(InSight);
 
 	if(GameServer()->Config()->m_SvBotAllowMove && GameServer()->Config()->m_SvBotAllowHook)
+	{
 		HandleHook(InSight);
+
+		// Throttle only new hook launches. Keep existing grabs attached,
+		// including emergency traversal hooks, so movement stays viable.
+		const CCharacterCore *pCore = m_pPlayer->GetCharacter()->GetCore();
+		if(m_InputData.m_Hook && !m_LastData.m_Hook && pCore->m_HookState == HOOK_IDLE)
+		{
+			if(Tick < m_NextHookTick)
+				m_InputData.m_Hook = 0;
+			else
+			{
+				m_NextHookTick = Tick + BotDelayTicks(Profile.m_HookDelayMs, GameServer()->Server()->TickSpeed());
+				if(random_int() % 100 >= Profile.m_HookChance)
+					m_InputData.m_Hook = 0;
+			}
+		}
+	}
 
 	if(m_Flags & BFLAG_LEFT)
 			m_InputData.m_Direction = -1;
@@ -642,20 +715,23 @@ void CBot::HandleWeapon(bool SeeTarget)
 	}
 	if(Weapon > -1)
 	{
+		const CBotDifficultyProfile Profile = BotDifficultyProfile(GameServer()->Config()->m_SvBotDifficulty);
 		m_InputData.m_WantedWeapon = Weapon+1;
-		m_InputData.m_Fire = m_LastData.m_Fire^1;
-		if(m_InputData.m_Fire)
-			m_Target = Target;
+		m_InputData.m_Fire = (m_LastData.m_Fire + 1) & INPUT_STATE_MASK;
+		m_Target = Target;
+		m_NextShotTick = GameServer()->Server()->Tick() +
+			BotDelayTicks(Profile.m_FireDelayMs, GameServer()->Server()->TickSpeed());
+
+		if(GameServer()->Config()->m_SvBotAccuracyError)
+		{
+			const float RandomUnit = (random_int() % 2001 - 1000) / 1000.0f;
+			const float AimError = RandomUnit * Profile.m_AimErrorDeg * (pi / 180.0f);
+			m_Target = direction(angle(m_Target) + AimError) * length(m_Target);
+		}
 	}
 	else if(pMe->GetAmmoCount(WEAPON_GUN) != 10)
 		m_InputData.m_WantedWeapon = WEAPON_GUN+1;
 
-
-	// Accuracy
-	if (GameServer()->Config()->m_SvBotAccuracyError) {
-		float Angle = angle(m_Target) + (random_int()%64-32)*pi / 1024.0f;
-		m_Target = direction(Angle)*length(m_Target);
-	}
 }
 
 void CBot::UpdateEdge()
